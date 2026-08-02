@@ -1,0 +1,9 @@
+pyproject.toml
+src/vbet.egg-info/PKG-INFO
+src/vbet.egg-info/SOURCES.txt
+src/vbet.egg-info/dependency_links.txt
+src/vbet.egg-info/requires.txt
+src/vbet.egg-info/top_level.txt
+src/vbet/data/fetch_matches.py
+src/vbet/models/poisson_model.py
+src/vbet/models/team_strength.py
