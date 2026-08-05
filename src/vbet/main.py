@@ -1,8 +1,11 @@
-from vbet.data.database import Database
+from vbet.data.fetchers.football_data_fetcher import FootballDataFetcher
 
 
-db = Database()
+def main():
+    fetcher = FootballDataFetcher()
 
-db.create_tables()
+    fetcher.print_matches("PL")
 
-print("Database ready")
+
+if __name__ == "__main__":
+    main()
