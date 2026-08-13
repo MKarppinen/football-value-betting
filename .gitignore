@@ -3,3 +3,8 @@ __pycache__/
 *.py[cod]
 .vscode/
 .env
+football.db
+downloaded_files/
+*.egg-info/
+__pycache__/
+.env
