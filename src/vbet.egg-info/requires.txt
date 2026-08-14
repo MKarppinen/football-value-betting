@@ -2,3 +2,5 @@ numpy
 scipy
 requests
 python-dotenv
+pandas
+soccerdata

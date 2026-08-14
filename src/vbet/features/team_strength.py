@@ -1,10 +1,9 @@
-"""Derive attack and defence strengths from actual FBref xG."""
+"""Calculate home and away xG averages from historical matches."""
+
 from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-
-from vbet.config import USE_XG
 
 
 class TeamStrength:
@@ -12,61 +11,68 @@ class TeamStrength:
         self.matches = list(matches)
 
         if not self.matches:
-            raise ValueError("At least one completed match is required.")
+            raise ValueError("Tietokannassa ei ole valmiita otteluita.")
 
-        scored = defaultdict(float)
-        conceded = defaultdict(float)
-        played = defaultdict(int)
+        # Home team statistics
+        home_scored_xg = defaultdict(float)
+        home_conceded_xg = defaultdict(float)
+        home_played = defaultdict(int)
 
-        total_for = 0.0
-        observations = 0
+        # Away team statistics
+        away_scored_xg = defaultdict(float)
+        away_conceded_xg = defaultdict(float)
+        away_played = defaultdict(int)
 
         for match in self.matches:
-            home = str(match["home_team"])
-            away = str(match["away_team"])
+            home_team = str(match["home_team"])
+            away_team = str(match["away_team"])
 
-            home_value = self._value(match, "home_xg", "home_goals")
-            away_value = self._value(match, "away_xg", "away_goals")
+            home_xg = float(match["home_xg"])
+            away_xg = float(match["away_xg"])
 
-            scored[home] += home_value
-            conceded[home] += away_value
-            scored[away] += away_value
-            conceded[away] += home_value
+            # Home team's home statistics
+            home_scored_xg[home_team] += home_xg
+            home_conceded_xg[home_team] += away_xg
+            home_played[home_team] += 1
 
-            played[home] += 1
-            played[away] += 1
+            # Away team's away statistics
+            away_scored_xg[away_team] += away_xg
+            away_conceded_xg[away_team] += home_xg
+            away_played[away_team] += 1
 
-            total_for += home_value + away_value
-            observations += 2
+        self._home_scored_xg = {}
+        self._home_conceded_xg = {}
+        self._away_scored_xg = {}
+        self._away_conceded_xg = {}
 
-        self.league_average = total_for / observations
-        self._attack = {}
-        self._defence = {}
+        # Average xG at home
+        for team, matches_played in home_played.items():
+            self._home_scored_xg[team] = (
+                home_scored_xg[team] / matches_played
+            )
 
-        for team, count in played.items():
-            self._attack[team] = (
-                scored[team] / count
-            ) / self.league_average
+            self._home_conceded_xg[team] = (
+                home_conceded_xg[team] / matches_played
+            )
 
-            self._defence[team] = (
-                conceded[team] / count
-            ) / self.league_average
+        # Average xG away
+        for team, matches_played in away_played.items():
+            self._away_scored_xg[team] = (
+                away_scored_xg[team] / matches_played
+            )
 
-    @staticmethod
-    def _value(
-        match: Mapping[str, object],
-        xg_key: str,
-        goal_key: str,
-    ) -> float:
-        xg = match.get(xg_key)
+            self._away_conceded_xg[team] = (
+                away_conceded_xg[team] / matches_played
+            )
 
-        if USE_XG and xg is not None:
-            return float(xg)
+    def home_scored_xg(self, team: str) -> float:
+        return self._home_scored_xg[team]
 
-        return float(match[goal_key])
+    def home_conceded_xg(self, team: str) -> float:
+        return self._home_conceded_xg[team]
 
-    def attack(self, team: str) -> float:
-        return self._attack[team]
+    def away_scored_xg(self, team: str) -> float:
+        return self._away_scored_xg[team]
 
-    def defence(self, team: str) -> float:
-        return self._defence[team]
+    def away_conceded_xg(self, team: str) -> float:
+        return self._away_conceded_xg[team]

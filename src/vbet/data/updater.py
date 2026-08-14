@@ -1,5 +1,5 @@
-"""Application service for updating the historical database."""
-from vbet.data.fetchers.fbref_fetcher import FBrefFetcher
+"""Application service for updating historical football data."""
+from vbet.data.fetchers.understat_fetcher import UnderstatFetcher
 from vbet.data.repository import MatchRepository
 
 
@@ -8,4 +8,6 @@ class DataUpdater:
         self.repository = repository or MatchRepository()
 
     def update_history(self) -> int:
-        return self.repository.save_matches(FBrefFetcher().get_matches())
+        return self.repository.save_matches(
+            UnderstatFetcher().get_matches()
+        )

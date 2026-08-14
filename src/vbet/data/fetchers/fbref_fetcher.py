@@ -1,4 +1,4 @@
-"""Fetch and normalize historical FBref schedules."""
+"""Fetch completed FBref matches and their actual xG values."""
 from __future__ import annotations
 
 from datetime import date
@@ -20,6 +20,7 @@ class FBrefFetcher:
     def _seasons(self) -> list[int]:
         today = date.today()
         current = today.year if today.month >= 7 else today.year - 1
+
         return list(range(current - (self.months // 12 + 1), current + 1))
 
     def get_matches(self) -> list[dict[str, Any]]:
@@ -31,47 +32,57 @@ class FBrefFetcher:
                 "FBref requires pandas and soccerdata."
             ) from error
 
-        frame = (
-            sd.FBref(
-                leagues=self.leagues,
-                seasons=self._seasons(),
-            )
-            .read_schedule()
-            .reset_index()
+        fbref = sd.FBref(
+            leagues=self.leagues,
+            seasons=self._seasons(),
         )
 
-        frame.columns = [
+        schedule = fbref.read_schedule().reset_index()
+        schedule.columns = [
             str(column).lower().replace(" ", "_")
-            for column in frame.columns
+            for column in schedule.columns
         ]
-        frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+
+        xg_by_match = self._get_xg_by_match(fbref)
+
+        schedule["date"] = pd.to_datetime(
+            schedule["date"],
+            errors="coerce",
+        )
 
         cutoff = pd.Timestamp.now().normalize() - pd.DateOffset(
             months=self.months
         )
-        frame = frame[frame["date"].ge(cutoff)]
 
-        matches = []
+        schedule = schedule[schedule["date"].ge(cutoff)]
+        matches: list[dict[str, Any]] = []
 
-        for row in frame.to_dict("records"):
-            home = row.get("home_team")
-            away = row.get("away_team")
+        for row in schedule.to_dict("records"):
+            home_team = row.get("home_team")
+            away_team = row.get("away_team")
             home_goals, away_goals = self._score(row)
 
-            if not home or not away:
+            if not home_team or not away_team:
                 continue
 
             if home_goals is None or away_goals is None:
                 continue
+
+            match_date = row["date"].date().isoformat()
+
+            xg = xg_by_match.get(
+                (match_date, str(home_team), str(away_team)),
+                {},
+            )
 
             matches.append(
                 {
                     "competition": str(
                         row.get("league") or self.leagues[0]
                     ),
-                    "date": row["date"].date().isoformat(),
-                    "home_team": str(home),
-                    "away_team": str(away),
+                    "date": match_date,
+                    "home_team": str(home_team),
+                    "away_team": str(away_team),
                     "home_goals": home_goals,
                     "away_goals": away_goals,
                     "season": str(row.get("season") or ""),
@@ -81,13 +92,57 @@ class FBrefFetcher:
                         str(row.get("game_id") or "") or None
                     ),
                     "stats": {
-                        "home_xg": self._number(row.get("home_xg")),
-                        "away_xg": self._number(row.get("away_xg")),
+                        "home_xg": xg.get("home_xg"),
+                        "away_xg": xg.get("away_xg"),
                     },
                 }
             )
 
         return matches
+
+    def _get_xg_by_match(self, fbref: Any) -> dict:
+        """Build date/home/away -> xG mapping from FBref team match logs."""
+        import pandas as pd
+
+        logs = fbref.read_team_match_stats(
+            stat_type="schedule"
+        ).reset_index()
+
+        logs.columns = [
+            str(column).lower().replace(" ", "_")
+            for column in logs.columns
+        ]
+
+        logs["date"] = pd.to_datetime(
+            logs["date"],
+            errors="coerce",
+        )
+
+        xg_by_match: dict = {}
+
+        for row in logs.to_dict("records"):
+            team = row.get("team")
+            opponent = row.get("opponent")
+            venue = str(row.get("venue") or "").lower()
+            xg = self._number(row.get("xg"))
+
+            if not team or not opponent or xg is None:
+                continue
+
+            if pd.isna(row["date"]):
+                continue
+
+            match_date = row["date"].date().isoformat()
+
+            if venue == "home":
+                key = (match_date, str(team), str(opponent))
+                xg_by_match.setdefault(key, {})["home_xg"] = xg
+
+            elif venue == "away":
+                key = (match_date, str(opponent), str(team))
+                xg_by_match.setdefault(key, {})["away_xg"] = xg
+
+        return xg_by_match
 
     @staticmethod
     def _score(row: dict[str, Any]) -> tuple[int | None, int | None]:
@@ -112,6 +167,7 @@ class FBrefFetcher:
         try:
             if value is None:
                 return None
+
             number = float(value)
             return number if number == number else None
         except (TypeError, ValueError):

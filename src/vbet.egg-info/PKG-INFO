@@ -6,3 +6,5 @@ Requires-Dist: numpy
 Requires-Dist: scipy
 Requires-Dist: requests
 Requires-Dist: python-dotenv
+Requires-Dist: pandas
+Requires-Dist: soccerdata

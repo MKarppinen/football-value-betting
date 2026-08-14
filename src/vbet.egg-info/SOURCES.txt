@@ -1,5 +1,6 @@
 pyproject.toml
 src/vbet/__init__.py
+src/vbet/config.py
 src/vbet/main.py
 src/vbet.egg-info/PKG-INFO
 src/vbet.egg-info/SOURCES.txt
